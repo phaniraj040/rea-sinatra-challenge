@@ -17,7 +17,7 @@
   },
   {
     "ParameterKey": "AMIID",
-    "ParameterValue": "AMIID generated from packer"
+    "ParameterValue": "Any Ubuntu AMIID"
   },
   {
     "ParameterKey": "InstanceType",
@@ -28,3 +28,4 @@
     "ParameterValue": "key-name"
   }
 ]
+

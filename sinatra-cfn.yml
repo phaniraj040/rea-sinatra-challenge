@@ -76,7 +76,10 @@ Resources:
             #!/bin/bash -x
             apt-get update
             apt-get install --yes awscli
-            cd /home/ubuntu/simple-sinatra-app
+            sudo apt install ruby-bundler -y 
+            git clone https://github.com/rea-cruitment/simple-sinatra-app.git
+            cd simple-sinatra-app 
+            bundle install
             sudo ruby helloworld.rb -o 0.0.0.0 -p 80
 
   InstanceSecurityGroup:

@@ -24,7 +24,7 @@
  "provisioners": [
   {
    "type": "shell",
-   "inline": "sudo apt-get update && git clone https://github.com/rea-cruitment/simple-sinatra-app.git && cd simple-sinatra-app && sudo apt install ruby-bundler -y && bundle install"
+   "inline": "sudo apt-get update && sudo apt install ruby-bundler -y && git clone https://github.com/rea-cruitment/simple-sinatra-app.git && cd simple-sinatra-app && bundle install"
   }
  ]
 }

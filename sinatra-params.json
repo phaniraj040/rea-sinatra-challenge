@@ -1,0 +1,30 @@
+[
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": "vpc-name"
+  },
+  {
+    "ParameterKey": "SubnetId",
+    "ParameterValue": "subnet-name"
+  },
+  {
+    "ParameterKey": "InstanceName",
+    "ParameterValue": "sinatra-instance"
+  },
+  {
+    "ParameterKey": "SshCidrAllow",
+    "ParameterValue": "0.0.0.0/0"
+  },
+  {
+    "ParameterKey": "AMIID",
+    "ParameterValue": "AMIID generated from packer"
+  },
+  {
+    "ParameterKey": "InstanceType",
+    "ParameterValue": "t2.medium"
+  },
+  {
+    "ParameterKey": "KeyName",
+    "ParameterValue": "key-name"
+  }
+]

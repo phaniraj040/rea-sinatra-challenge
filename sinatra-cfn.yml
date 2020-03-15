@@ -1,0 +1,131 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Single machine in autoscaling 1:1 for simple test and simple purpose
+Parameters:
+  AMIID:
+    Type: String
+  VpcId:
+    Type: String
+  SubnetId:
+    Type: String
+  InstanceName:
+    Type: String
+  SshCidrAllow:
+    Type: String
+    Description: IP Address to allow ssh
+    MinLength: '9'
+    MaxLength: '18'
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.medium
+    AllowedValues:
+    - t2.medium
+    - t2.small
+  KeyName:
+    Description: The EC2 Key Pair to allow SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+Resources:
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      SecurityGroups:
+        - !Ref LBSecurityGroup
+      Subnets:
+        - !Ref SubnetId
+      Scheme: internet-facing
+      Listeners:
+        - InstancePort: 80
+          InstanceProtocol: HTTP
+          LoadBalancerPort: 80
+          Protocol: HTTP
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      Tags:
+      - Key: Name
+        Value:
+          !Ref InstanceName
+        PropagateAtLaunch: 'true'
+      LaunchConfigurationName:
+        Ref: LaunchConfiguration
+      MinSize: 1
+      MaxSize: 1
+      VPCZoneIdentifier:
+        - !Ref SubnetId
+      LoadBalancerNames:
+        - !Ref LoadBalancer
+
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId:
+        Ref: AMIID
+      KeyName:
+        Ref: KeyName
+      SecurityGroups:
+      - Ref: InstanceSecurityGroup
+      - Ref: SSHSecurityGroup
+      InstanceType:
+        Ref: InstanceType
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash -x
+            apt-get update
+            apt-get install --yes awscli
+            cd /home/ubuntu/simple-sinatra-app
+            sudo ruby helloworld.rb -o 0.0.0.0 -p 80
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        !Ref VpcId
+      GroupDescription: Enable HTTP from LBSecurity Group
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        SourceSecurityGroupId:
+          !Ref LBSecurityGroup
+
+  LBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        !Ref VpcId
+      GroupDescription: Enable HTTP from outside
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+
+  SSHSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        !Ref VpcId
+      GroupDescription: Enable SSH access from user given IPaddress only
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp:
+          Ref: SshCidrAllow
+Outputs:
+  InstanceSecurityGroup:
+    Description: Security group ec2
+    Value:
+      Fn::GetAtt:
+      - InstanceSecurityGroup
+      - GroupId
+  LoadBalancer:
+    Description: DNS entry of ElasticLoadBalancer
+    Value:
+      Fn::GetAtt:
+      - LoadBalancer
+      - DNSName

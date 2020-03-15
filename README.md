@@ -6,7 +6,7 @@ This Repository is for REA Group Coding Challenge
 # Pre-requisites:
 A Machine with Packer installed to build the AMI with all the dependencies installed for deploying the Sinatra Application
 
-AWS IAM User AWSSecretKey and AWSAccessKeyId
+AWS IAM User with AWSSecretKey and AWSAccessKeyId
 
 # Design:
 Used a base Ubuntu Image and install ruby dependencies required to run the Sinatra application. Reason to choose a Ubuntu image is for the ease of installing the ruby bundler

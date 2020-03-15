@@ -3,16 +3,16 @@ This Repository is for REA Group Coding Challenge
 
 ## Provision a configuration-as-code recipe for Simple Sinatra Application Deployment
 
-##Pre-requisites:
+# Pre-requisites:
 A Machine with Packer installed to build the AMI with all the dependencies installed for deploying the Sinatra Application
 AWS IAM User AWSSecretKey and AWSAccessKeyId with permissions to create a CloudFormation Stack
 
-##Design:
+# Design:
 Used a base Ubuntu Image and install ruby dependencies required to run the Sinatra application. Reason to choose a Ubuntu image is for the ease of installing the ruby bundler
 
 To build AMI required for our Sinatra application:
 
-##How to Bake an AMI
+# How to Bake an AMI
 ```
 packer build -var 'aws_access_key=YOUR ACCESS KEY' -var 'aws_secret_key=YOUR SECRET KEY' packer-sinatra.json
 ```

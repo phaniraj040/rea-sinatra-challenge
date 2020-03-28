@@ -1,20 +1,12 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Single machine in autoscaling 1:1 for simple test and simple purpose
+Description: Single Sinatra Application in autoscaling 1:1
 Parameters:
   AMIID:
     Type: String
-  VpcId:
-    Type: String
-  SubnetId:
-    Type: String
+    Default: ami-02a599eb01e3b3c5b
   InstanceName:
     Type: String
-  SshCidrAllow:
-    Type: String
-    Description: IP Address to allow ssh
-    MinLength: '9'
-    MaxLength: '18'
   InstanceType:
     Description: EC2 instance type
     Type: String
@@ -22,62 +14,138 @@ Parameters:
     AllowedValues:
     - t2.medium
     - t2.small
-  KeyName:
-    Description: The EC2 Key Pair to allow SSH access to the instances
-    Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
 Resources:
-  InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
+  VPC:
+    Type: AWS::EC2::VPC
     Properties:
-      Path: "/"
-      Roles:
-      - Ref: InstanceIAMRole
-  InstanceIAMRole:
-    Type: AWS::IAM::Role
+      CidrBlock: 10.1.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value:  !Join ['', [!Ref "AWS::StackName", "-VPC" ]]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
     Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service:
-            - ec2.amazonaws.com
-          Action:
-          - sts:AssumeRole
-      Path: "/"
-      Policies:
-      - PolicyName: s3
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - s3:*
-            Resource:
-            - Fn::Join:
-              - ''
-              - - 'arn:aws:s3:::'
-                - "*"
-      - PolicyName: logs
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - logs:CreateLogGroup
-            - logs:CreateLogStream
-            - logs:PutLogEvents
-            - logs:DescribeLogStreams
-            Resource:
-            - arn:aws:logs:*:*:*
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-IGW" ]]
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId:
+        Ref: InternetGateway
+      VpcId:
+        Ref: VPC
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn: myPublicSubnet
+    Properties:
+      AllocationId:
+         Fn::GetAtt:
+         - EIP
+         - AllocationId
+      SubnetId:
+        Ref: myPublicSubnet
+      Tags:
+       - Key: Name
+         Value: !Join ['', [!Ref "AWS::StackName", "-NATGW" ]]
+
+  EIP:
+   Type: AWS::EC2::EIP
+   Properties:
+      Domain: vpc
+
+  myIGWRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref "AWS::StackName", "-RouteTable" ]]
+
+  myNATRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref "AWS::StackName", "-NATRouteTable" ]]
+
+  myNATRoute:
+    Type: AWS::EC2::Route
+    DependsOn: NATGateway
+    Properties:
+       RouteTableId:
+         Ref: myNATRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       NatGatewayId:
+         Ref: NATGateway
+
+  myIGWRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+       RouteTableId:
+         Ref: myIGWRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId:
+         Ref: InternetGateway
+
+  myPrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: myPrivateSubnet
+    Properties:
+      SubnetId:
+        Ref: myPrivateSubnet
+      RouteTableId:
+        Ref: myNATRouteTable
+
+  myPublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: myPublicSubnet
+    Properties:
+      SubnetId:
+        Ref: myPublicSubnet
+      RouteTableId:
+        Ref: myIGWRouteTable
+
+  myPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock: 10.1.1.0/24
+      AvailabilityZone: "ap-southeast-2a"
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: !Join ['', [!Ref "AWS::StackName", "-PrivateSubnet" ]]
+
+  myPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: "ap-southeast-2a"
+      CidrBlock: 10.1.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-PublicSubnet" ]]
+
   LoadBalancer:
     Type: AWS::ElasticLoadBalancing::LoadBalancer
     Properties:
       SecurityGroups:
         - !Ref LBSecurityGroup
       Subnets:
-        - !Ref SubnetId
+        - !Ref myPublicSubnet
       Scheme: internet-facing
       Listeners:
         - InstancePort: 80
@@ -87,6 +155,7 @@ Resources:
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: myPrivateSubnet
     Properties:
       Tags:
       - Key: Name
@@ -98,21 +167,17 @@ Resources:
       MinSize: 1
       MaxSize: 1
       VPCZoneIdentifier:
-        - !Ref SubnetId
+        - Ref: myPrivateSubnet
       LoadBalancerNames:
         - !Ref LoadBalancer
 
   LaunchConfiguration:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      IamInstanceProfile: !Ref InstanceProfile
       ImageId:
         Ref: AMIID
-      KeyName:
-        Ref: KeyName
       SecurityGroups:
       - Ref: InstanceSecurityGroup
-      - Ref: SSHSecurityGroup
       InstanceType:
         Ref: InstanceType
       UserData:
@@ -121,7 +186,7 @@ Resources:
             #!/bin/bash -x
             apt-get update
             apt-get install --yes awscli
-            sudo apt install ruby-bundler -y
+            apt install ruby-bundler -y
             git clone https://github.com/rea-cruitment/simple-sinatra-app.git
             cd simple-sinatra-app
             bundle install
@@ -131,7 +196,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId:
-        !Ref VpcId
+        Ref: VPC
       GroupDescription: Enable HTTP from LBSecurity Group
       SecurityGroupIngress:
       - IpProtocol: tcp
@@ -144,7 +209,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId:
-        !Ref VpcId
+        Ref: VPC
       GroupDescription: Enable HTTP from outside
       SecurityGroupIngress:
       - IpProtocol: tcp
@@ -152,18 +217,6 @@ Resources:
         ToPort: '80'
         CidrIp: 0.0.0.0/0
 
-  SSHSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      VpcId:
-        !Ref VpcId
-      GroupDescription: Enable SSH access from user given IPaddress only
-      SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: '22'
-        ToPort: '22'
-        CidrIp:
-          Ref: SshCidrAllow
 Outputs:
   InstanceSecurityGroup:
     Description: Security group ec2
